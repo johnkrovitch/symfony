@@ -40,9 +40,6 @@ class Security extends LegacySecurity
     {
         $request = $this->container->get('request_stack')->getCurrentRequest();
 
-        if (!class_exists(AuthenticatorInterface::class)) {
-            throw new \LogicException('Security HTTP is missing. Try running "composer require symfony/security-http".');
-        }
         $authenticator = $this->getAuthenticator($authenticatorName, $firewallName ?? $this->getFirewallName($request));
 
         $this->container->get('security.user_checker')->checkPreAuth($user);
@@ -70,10 +67,15 @@ class Security extends LegacySecurity
 
             return $firewallAuthenticatorLocator->get($authenticatorIds[0]);
         }
+
+        if ($firewallAuthenticatorLocator->has($authenticatorName)) {
+            return $firewallAuthenticatorLocator->get($authenticatorName);
+        }
+
         $authenticatorId = 'security.authenticator.'.$authenticatorName.'.'.$firewallName;
 
         if (!$firewallAuthenticatorLocator->has($authenticatorId)) {
-            throw new LogicException(sprintf('Unable to find an authenticator named "%s" for the firewall "%s". Try to pass a firewall name in the Security::login() method.', $authenticatorName, $firewallName));
+            throw new LogicException(sprintf('Unable to find an authenticator named "%s" for the firewall "%s". Available authenticators: %s.', $authenticatorName, implode('", "', $firewallAuthenticatorLocator->getProvidedServices())));
         }
 
         return $firewallAuthenticatorLocator->get($authenticatorId);
