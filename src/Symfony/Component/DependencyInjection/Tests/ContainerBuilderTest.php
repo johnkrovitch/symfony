@@ -517,6 +517,19 @@ class ContainerBuilderTest extends TestCase
         $this->assertEquals('foobar', $builder->get('foo')->arguments['foo']);
     }
 
+    public function testEnvExpressionFunction()
+    {
+        $container = new ContainerBuilder();
+        $container->register('bar', 'BarClass')
+            ->setPublic(true)
+            ->setProperty('foo', new Expression('env("BAR_FOO")'));
+        $container->compile(true);
+
+        $_ENV['BAR_FOO'] = 'Foo value';
+
+        $this->assertEquals('Foo value', $container->get('bar')->foo);
+    }
+
     public function testCreateServiceWithAbstractArgument()
     {
         $this->expectException(RuntimeException::class);
@@ -1066,10 +1079,19 @@ class ContainerBuilderTest extends TestCase
         $container->addDefinitions([
             'bar' => $fooDefinition,
             'bar_user' => $fooUserDefinition->setPublic(true),
+            'bar_user2' => $fooUserDefinition->setPublic(true),
         ]);
 
         $container->compile();
+        $this->assertNull($container->get('bar', $container::NULL_ON_INVALID_REFERENCE));
         $this->assertInstanceOf(\BarClass::class, $container->get('bar_user')->bar);
+
+        // Ensure that accessing a public service with a shared private service
+        // does not make the private service available.
+        $this->assertNull($container->get('bar', $container::NULL_ON_INVALID_REFERENCE));
+
+        // Ensure the private service is still shared.
+        $this->assertSame($container->get('bar_user')->bar, $container->get('bar_user2')->bar);
     }
 
     public function testThrowsExceptionWhenSetServiceOnACompiledContainer()
@@ -1159,7 +1181,6 @@ class ContainerBuilderTest extends TestCase
         $container->compile();
 
         $r = new \ReflectionProperty($container, 'resources');
-        $r->setAccessible(true);
         $resources = $r->getValue($container);
 
         $classInList = false;
@@ -1711,6 +1732,25 @@ class ContainerBuilderTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    public function testExpressionInFactory()
+    {
+        $container = new ContainerBuilder();
+        $container
+            ->register('foo', 'stdClass')
+            ->setPublic(true)
+            ->setProperty('bar', new Reference('bar'))
+        ;
+        $container
+            ->register('bar', 'string')
+            ->setFactory('@=arg(0) + args.get(0) + args.count()')
+            ->addArgument(123)
+        ;
+
+        $container->compile();
+
+        $this->assertSame(247, $container->get('foo')->bar);
+    }
+
     public function testFindTags()
     {
         $container = new ContainerBuilder();
@@ -1721,6 +1761,33 @@ class ContainerBuilderTest extends TestCase
             ->addTag('tag3');
 
         $this->assertSame(['tag1', 'tag2', 'tag3'], $container->findTags());
+    }
+
+    public function testNamedArgumentAfterCompile()
+    {
+        $container = new ContainerBuilder();
+        $container->register(E::class)
+            ->setPublic(true)
+            ->setArguments(['$second' => 2]);
+
+        $container->compile();
+
+        $e = $container->get(E::class);
+
+        $this->assertSame('', $e->first);
+        $this->assertSame(2, $e->second);
+    }
+
+    public function testNamedArgumentBeforeCompile()
+    {
+        $container = new ContainerBuilder();
+        $container->register(E::class, E::class)
+            ->setPublic(true)
+            ->setArguments(['$first' => 1]);
+
+        $e = $container->get(E::class);
+
+        $this->assertSame(1, $e->first);
     }
 }
 
@@ -1749,4 +1816,16 @@ class C implements X
 
 class D implements X
 {
+}
+
+class E
+{
+    public $first;
+    public $second;
+
+    public function __construct($first = '', $second = '')
+    {
+        $this->first = $first;
+        $this->second = $second;
+    }
 }

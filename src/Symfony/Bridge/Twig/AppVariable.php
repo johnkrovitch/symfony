@@ -100,7 +100,7 @@ class AppVariable
         }
         $request = $this->getRequest();
 
-        return $request && $request->hasSession() ? $request->getSession() : null;
+        return $request?->hasSession() ? $request->getSession() : null;
     }
 
     /**
@@ -139,7 +139,7 @@ class AppVariable
             if (null === $session = $this->getSession()) {
                 return [];
             }
-        } catch (\RuntimeException $e) {
+        } catch (\RuntimeException) {
             return [];
         }
 

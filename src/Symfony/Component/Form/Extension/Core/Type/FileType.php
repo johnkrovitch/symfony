@@ -18,6 +18,7 @@ use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\OptionsResolver\Options;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -114,9 +115,9 @@ class FileType extends AbstractType
     public function configureOptions(OptionsResolver $resolver)
     {
         $dataClass = null;
-        if (class_exists(\Symfony\Component\HttpFoundation\File\File::class)) {
+        if (class_exists(File::class)) {
             $dataClass = function (Options $options) {
-                return $options['multiple'] ? null : 'Symfony\Component\HttpFoundation\File\File';
+                return $options['multiple'] ? null : File::class;
             };
         }
 
@@ -175,7 +176,7 @@ class FileType extends AbstractType
      */
     private static function getMaxFilesize(): int|float
     {
-        $iniMax = strtolower(ini_get('upload_max_filesize'));
+        $iniMax = strtolower(\ini_get('upload_max_filesize'));
 
         if ('' === $iniMax) {
             return \PHP_INT_MAX;
@@ -192,11 +193,11 @@ class FileType extends AbstractType
 
         switch (substr($iniMax, -1)) {
             case 't': $max *= 1024;
-            // no break
+                // no break
             case 'g': $max *= 1024;
-            // no break
+                // no break
             case 'm': $max *= 1024;
-            // no break
+                // no break
             case 'k': $max *= 1024;
         }
 

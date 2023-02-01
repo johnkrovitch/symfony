@@ -8,11 +8,17 @@ defaults:
   run:
     shell: bash
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
 
   tests:
     name: Tests
-    runs-on: Ubuntu-20.04
 
     env:
       extensions: amqp,apcu,igbinary,intl,mbstring,memcached,redis-5.3.4
@@ -21,30 +27,27 @@ jobs:
       matrix:
         include:
           - php: '8.1'
-          - php: '8.0'
+          - php: '8.1'
             mode: high-deps
           - php: '8.1'
             mode: low-deps
           - php: '8.2'
-            mode: experimental
+            #mode: experimental
       fail-fast: false
+
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
-
-      - name: Configure for PHP >= 8.2
-        if: "matrix.php >= '8.2'"
-        run: |
-          composer config platform.php 8.1.99
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           coverage: "none"
-          ini-values: date.timezone=Europe/Paris,memory_limit=-1,default_socket_timeout=10,session.gc_probability=0,apc.enable_cli=1,zend.assertions=1
+          ini-values: date.timezone=UTC,memory_limit=-1,default_socket_timeout=10,session.gc_probability=0,apc.enable_cli=1,zend.assertions=1
           php-version: "${{ matrix.php }}"
           extensions: "${{ env.extensions }}"
           tools: flex
@@ -60,11 +63,11 @@ jobs:
           ([ -d "$COMPOSER_HOME" ] || mkdir "$COMPOSER_HOME") && cp .github/composer-config.json "$COMPOSER_HOME/config.json"
 
           echo COLUMNS=120 >> $GITHUB_ENV
-          echo PHPUNIT="$(readlink -f ./phpunit) --exclude-group tty,benchmark,intl-data" >> $GITHUB_ENV
-          echo COMPOSER_UP='composer update --no-progress --ansi' >> $GITHUB_ENV
+          echo PHPUNIT="$(pwd)/phpunit --exclude-group tty,benchmark,intl-data,integration" >> $GITHUB_ENV
+          echo COMPOSER_UP='composer update --no-progress --ansi'$([[ "${{ matrix.php }}" = "8.2" ]] && echo ' --ignore-platform-req=php+') >> $GITHUB_ENV
 
           SYMFONY_VERSIONS=$(git ls-remote -q --heads | cut -f2 | grep -o '/[1-9][0-9]*\.[0-9].*' | sort -V)
-          SYMFONY_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | grep -P -o '[0-9]+\.[0-9]+')
+          SYMFONY_VERSION=$(grep ' VERSION = ' src/Symfony/Component/HttpKernel/Kernel.php | cut -d "'" -f2 | cut -d '.' -f 1-2)
           SYMFONY_FEATURE_BRANCH=$(curl -s https://raw.githubusercontent.com/symfony/recipes/flex/main/index.json | jq -r '.versions."dev-name"')
 
           # Install the phpunit-bridge from a PR if required
@@ -110,9 +113,9 @@ jobs:
 
           # Skip the phpunit-bridge on bugfix-branches when not in *-deps mode
           if [[ ! "${{ matrix.mode }}" = *-deps && $SYMFONY_VERSION != $SYMFONY_FEATURE_BRANCH ]]; then
-            echo COMPONENTS=$(find src/Symfony -mindepth 2 -type f -name phpunit.xml.dist -not -wholename '*/Bridge/PhpUnit/*' -printf '%h ') >> $GITHUB_ENV
+            echo COMPONENTS=$(find src/Symfony -mindepth 2 -type f -name phpunit.xml.dist -not -wholename '*/Bridge/PhpUnit/*' | xargs -I{} dirname {}) >> $GITHUB_ENV
           else
-            echo COMPONENTS=$(find src/Symfony -mindepth 2 -type f -name phpunit.xml.dist -printf '%h ') >> $GITHUB_ENV
+            echo COMPONENTS=$(find src/Symfony -mindepth 2 -type f -name phpunit.xml.dist | xargs -I{} dirname {}) >> $GITHUB_ENV
           fi
 
           # Legacy tests are skipped when deps=high and when the current branch version has not the same major version number as the next one
@@ -139,8 +142,8 @@ jobs:
           patch -sp1 < .github/expected-missing-return-types.diff
           git add .
           composer install -q --optimize-autoloader
-          SYMFONY_PATCH_TYPE_DECLARATIONS='force=2&php=8.0' php .github/patch-types.php
-          SYMFONY_PATCH_TYPE_DECLARATIONS='force=2&php=8.0' php .github/patch-types.php # ensure the script is idempotent
+          SYMFONY_PATCH_TYPE_DECLARATIONS='force=2&php=8.1' php .github/patch-types.php
+          SYMFONY_PATCH_TYPE_DECLARATIONS='force=2&php=8.1' php .github/patch-types.php # ensure the script is idempotent
           git diff --exit-code
 
       - name: Run tests
@@ -211,13 +214,18 @@ jobs:
 
           [[ ! $X ]] || (exit 1)
 
+      - name: Run TTY tests
+        if: "! matrix.mode"
+        run: |
+            script -e -c './phpunit --group tty' /dev/null
+
       - name: Run tests with SIGCHLD enabled PHP
-        if: "matrix.php == '8.0' && ! matrix.mode"
+        if: "matrix.php == '8.1' && ! matrix.mode"
         run: |
           mkdir build
           cd build
-          wget -q https://github.com/symfony/binary-utils/releases/download/v0.1/php-8.0.2-pcntl-sigchild.tar.bz2
-          tar -xjf php-8.0.2-pcntl-sigchild.tar.bz2
+          wget -q https://github.com/symfony/binary-utils/releases/download/v0.1/php-8.1.2-pcntl-sigchild.tar.bz2
+          tar -xjf php-8.1.2-pcntl-sigchild.tar.bz2
           cd ..
 
           ./build/php/bin/php ./phpunit --colors=always src/Symfony/Component/Process

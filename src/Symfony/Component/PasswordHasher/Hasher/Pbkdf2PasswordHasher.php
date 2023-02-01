@@ -52,7 +52,7 @@ final class Pbkdf2PasswordHasher implements LegacyPasswordHasherInterface
 
         try {
             $this->encodedLength = \strlen($this->hash('', 'salt'));
-        } catch (\LogicException $e) {
+        } catch (\LogicException) {
             // ignore unsupported algorithm
         }
 
@@ -76,7 +76,7 @@ final class Pbkdf2PasswordHasher implements LegacyPasswordHasherInterface
 
     public function verify(string $hashedPassword, string $plainPassword, string $salt = null): bool
     {
-        if (\strlen($hashedPassword) !== $this->encodedLength || false !== strpos($hashedPassword, '$')) {
+        if (\strlen($hashedPassword) !== $this->encodedLength || str_contains($hashedPassword, '$')) {
             return false;
         }
 

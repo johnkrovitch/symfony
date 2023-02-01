@@ -98,7 +98,7 @@ EOF
 
         if (null === $path = $input->getArgument('path')) {
             $io->title(
-                sprintf('Current configuration for %s', ($name === $extensionAlias ? sprintf('extension with alias "%s"', $extensionAlias) : sprintf('"%s"', $name)))
+                sprintf('Current configuration for %s', $name === $extensionAlias ? sprintf('extension with alias "%s"', $extensionAlias) : sprintf('"%s"', $name))
             );
 
             $io->writeln(Yaml::dump([$extensionAlias => $config], 10));
@@ -127,7 +127,6 @@ EOF
         $kernel->boot();
 
         $method = new \ReflectionMethod($kernel, 'buildContainer');
-        $method->setAccessible(true);
         $container = $method->invoke($kernel);
         $container->getCompiler()->compile($container);
 
@@ -196,7 +195,7 @@ EOF
                 $config = $this->getConfig($this->findExtension($name), $this->compileContainer());
                 $paths = array_keys(self::buildPathsCompletion($config));
                 $suggestions->suggestValues($paths);
-            } catch (LogicException $e) {
+            } catch (LogicException) {
             }
         }
     }

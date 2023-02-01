@@ -50,8 +50,8 @@ trait MicroKernelTrait
     {
         $configDir = $this->getConfigDir();
 
-        $container->import($configDir.'/{packages}/*.yaml');
-        $container->import($configDir.'/{packages}/'.$this->environment.'/*.yaml');
+        $container->import($configDir.'/{packages}/*.{php,yaml}');
+        $container->import($configDir.'/{packages}/'.$this->environment.'/*.{php,yaml}');
 
         if (is_file($configDir.'/services.yaml')) {
             $container->import($configDir.'/services.yaml');
@@ -74,13 +74,17 @@ trait MicroKernelTrait
     {
         $configDir = $this->getConfigDir();
 
-        $routes->import($configDir.'/{routes}/'.$this->environment.'/*.yaml');
-        $routes->import($configDir.'/{routes}/*.yaml');
+        $routes->import($configDir.'/{routes}/'.$this->environment.'/*.{php,yaml}');
+        $routes->import($configDir.'/{routes}/*.{php,yaml}');
 
         if (is_file($configDir.'/routes.yaml')) {
             $routes->import($configDir.'/routes.yaml');
         } else {
             $routes->import($configDir.'/{routes}.php');
+        }
+
+        if (false !== ($fileName = (new \ReflectionObject($this))->getFileName())) {
+            $routes->import($fileName, 'annotation');
         }
     }
 
@@ -146,7 +150,7 @@ trait MicroKernelTrait
                 ],
             ]);
 
-            $kernelClass = false !== strpos(static::class, "@anonymous\0") ? parent::class : static::class;
+            $kernelClass = str_contains(static::class, "@anonymous\0") ? parent::class : static::class;
 
             if (!$container->hasDefinition('kernel')) {
                 $container->register('kernel', $kernelClass)
@@ -214,6 +218,8 @@ trait MicroKernelTrait
 
             if (\is_array($controller) && [0, 1] === array_keys($controller) && $this === $controller[0]) {
                 $route->setDefault('_controller', ['kernel', $controller[1]]);
+            } elseif ($controller instanceof \Closure && $this === ($r = new \ReflectionFunction($controller))->getClosureThis() && !str_contains($r->name, '{closure}')) {
+                $route->setDefault('_controller', ['kernel', $r->name]);
             }
         }
 

@@ -585,7 +585,7 @@ class Finder implements \IteratorAggregate, \Countable
                 $resolvedDirs[] = [$this->normalizeDir($dir)];
             } elseif ($glob = glob($dir, (\defined('GLOB_BRACE') ? \GLOB_BRACE : 0) | \GLOB_ONLYDIR | \GLOB_NOSORT)) {
                 sort($glob);
-                $resolvedDirs[] = array_map([$this, 'normalizeDir'], $glob);
+                $resolvedDirs[] = array_map($this->normalizeDir(...), $glob);
             } else {
                 throw new DirectoryNotFoundException(sprintf('The "%s" directory does not exist.', $dir));
             }
@@ -600,6 +600,8 @@ class Finder implements \IteratorAggregate, \Countable
      * Returns an Iterator for the current Finder configuration.
      *
      * This method implements the IteratorAggregate interface.
+     *
+     * @return \Iterator<string, SplFileInfo>
      *
      * @throws \LogicException if the in() method has not been called
      */

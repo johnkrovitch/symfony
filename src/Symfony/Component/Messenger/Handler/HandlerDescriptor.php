@@ -25,9 +25,7 @@ final class HandlerDescriptor
 
     public function __construct(callable $handler, array $options = [])
     {
-        if (!$handler instanceof \Closure) {
-            $handler = \Closure::fromCallable($handler);
-        }
+        $handler = $handler(...);
 
         $this->handler = $handler;
         $this->options = $options;
@@ -37,7 +35,7 @@ final class HandlerDescriptor
         if (str_contains($r->name, '{closure}')) {
             $this->name = 'Closure';
         } elseif (!$handler = $r->getClosureThis()) {
-            $class = $r->getClosureScopeClass();
+            $class = \PHP_VERSION_ID >= 80111 ? $r->getClosureCalledClass() : $r->getClosureScopeClass();
 
             $this->name = ($class ? $class->name.'::' : '').$r->name;
         } else {

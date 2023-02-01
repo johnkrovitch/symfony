@@ -64,7 +64,7 @@ class HttpBasicAuthenticator implements AuthenticatorInterface, AuthenticationEn
         $password = $request->headers->get('PHP_AUTH_PW', '');
 
         $passport = new Passport(
-            new UserBadge($username, [$this->userProvider, 'loadUserByIdentifier']),
+            new UserBadge($username, $this->userProvider->loadUserByIdentifier(...)),
             new PasswordCredentials($password)
         );
         if ($this->userProvider instanceof PasswordUpgraderInterface) {
@@ -86,9 +86,7 @@ class HttpBasicAuthenticator implements AuthenticatorInterface, AuthenticationEn
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
-        if (null !== $this->logger) {
-            $this->logger->info('Basic authentication failed for user.', ['username' => $request->headers->get('PHP_AUTH_USER'), 'exception' => $exception]);
-        }
+        $this->logger?->info('Basic authentication failed for user.', ['username' => $request->headers->get('PHP_AUTH_USER'), 'exception' => $exception]);
 
         return $this->start($request, $exception);
     }

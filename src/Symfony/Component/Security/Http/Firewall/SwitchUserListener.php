@@ -158,7 +158,7 @@ class SwitchUserListener extends AbstractListener
 
             try {
                 $this->provider->loadUserByIdentifier($nonExistentUsername);
-            } catch (\Exception $e) {
+            } catch (\Exception) {
             }
         } catch (AuthenticationException $e) {
             $this->provider->loadUserByIdentifier($currentUsername);
@@ -173,9 +173,7 @@ class SwitchUserListener extends AbstractListener
             throw $exception;
         }
 
-        if (null !== $this->logger) {
-            $this->logger->info('Attempting to switch to user.', ['username' => $username]);
-        }
+        $this->logger?->info('Attempting to switch to user.', ['username' => $username]);
 
         $this->userChecker->checkPostAuth($user);
 

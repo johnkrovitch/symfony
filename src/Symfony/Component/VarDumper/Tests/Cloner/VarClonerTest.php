@@ -330,7 +330,7 @@ EOTXT;
 
     public function testJsonCast()
     {
-        if (2 == ini_get('xdebug.overload_var_dump')) {
+        if (2 == \ini_get('xdebug.overload_var_dump')) {
             $this->markTestSkipped('xdebug is active');
         }
 
@@ -571,9 +571,6 @@ EOTXT;
         $this->assertStringMatchesFormat($expected, print_r($clone, true));
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testPhp81Enums()
     {
         $data = new Php81Enums();

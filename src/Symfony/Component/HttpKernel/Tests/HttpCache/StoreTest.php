@@ -12,8 +12,10 @@
 namespace Symfony\Component\HttpKernel\Tests\HttpCache;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\HttpCache\HttpCache;
 use Symfony\Component\HttpKernel\HttpCache\Store;
 
 class StoreTest extends TestCase
@@ -317,6 +319,17 @@ class StoreTest extends TestCase
         $this->assertEmpty($this->getStoreMetadata($requestHttps));
     }
 
+    public function testDoesNotStorePrivateHeaders()
+    {
+        $request = Request::create('https://example.com/foo');
+        $response = new Response('foo');
+        $response->headers->setCookie(Cookie::fromString('foo=bar'));
+
+        $this->store->write($request, $response);
+        $this->assertArrayNotHasKey('set-cookie', $this->getStoreMetadata($request)[0][1]);
+        $this->assertNotEmpty($response->headers->getCookies());
+    }
+
     protected function storeSimpleEntry($path = null, $headers = [])
     {
         if (null === $path) {
@@ -333,11 +346,9 @@ class StoreTest extends TestCase
     {
         $r = new \ReflectionObject($this->store);
         $m = $r->getMethod('getMetadata');
-        $m->setAccessible(true);
 
         if ($key instanceof Request) {
             $m1 = $r->getMethod('getCacheKey');
-            $m1->setAccessible(true);
             $key = $m1->invoke($this->store, $key);
         }
 
@@ -348,7 +359,6 @@ class StoreTest extends TestCase
     {
         $r = new \ReflectionObject($this->store);
         $m = $r->getMethod('getPath');
-        $m->setAccessible(true);
 
         return $m->invoke($this->store, $key);
     }

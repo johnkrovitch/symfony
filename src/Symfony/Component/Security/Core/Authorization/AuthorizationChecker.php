@@ -31,7 +31,7 @@ class AuthorizationChecker implements AuthorizationCheckerInterface
     public function __construct(TokenStorageInterface $tokenStorage, AccessDecisionManagerInterface $accessDecisionManager, bool $exceptionOnNoToken = false)
     {
         if ($exceptionOnNoToken) {
-            throw new \LogicException('Argument $exceptionOnNoToken of "%s()" must be set to "false".', __METHOD__);
+            throw new \LogicException(sprintf('Argument $exceptionOnNoToken of "%s()" must be set to "false".', __METHOD__));
         }
 
         $this->tokenStorage = $tokenStorage;
@@ -40,8 +40,6 @@ class AuthorizationChecker implements AuthorizationCheckerInterface
 
     /**
      * {@inheritdoc}
-     *
-     * @throws AuthenticationCredentialsNotFoundException when the token storage has no authentication token and $exceptionOnNoToken is set to true
      */
     final public function isGranted(mixed $attribute, mixed $subject = null): bool
     {

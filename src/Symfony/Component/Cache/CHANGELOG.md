@@ -1,6 +1,12 @@
 CHANGELOG
 =========
 
+6.1
+---
+
+ * Add support for ACL auth in RedisAdapter
+ * Improve reliability and performance of `TagAwareAdapter` by making tag versions an integral part of item value
+
 6.0
 ---
 
@@ -10,7 +16,6 @@ CHANGELOG
 5.4
 ---
 
- * Make `LockRegistry` use semaphores when possible
  * Deprecate `DoctrineProvider` and `DoctrineAdapter` because these classes have been added to the `doctrine/cache` package
  * Add `DoctrineDbalAdapter` identical to `PdoAdapter` for `Doctrine\DBAL\Connection` or DBAL URL
  * Deprecate usage of `PdoAdapter` with `Doctrine\DBAL\Connection` or DBAL URL

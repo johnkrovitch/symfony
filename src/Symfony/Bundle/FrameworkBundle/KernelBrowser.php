@@ -62,8 +62,6 @@ class KernelBrowser extends HttpKernelBrowser
 
     /**
      * Gets the profile associated with the current Response.
-     *
-     * @return HttpProfile|false|null
      */
     public function getProfile(): HttpProfile|false|null
     {
@@ -117,11 +115,11 @@ class KernelBrowser extends HttpKernelBrowser
         }
 
         if (!$user instanceof UserInterface) {
-            throw new \LogicException(sprintf('The first argument of "%s" must be instance of "%s", "%s" provided.', __METHOD__, UserInterface::class, \is_object($user) ? \get_class($user) : \gettype($user)));
+            throw new \LogicException(sprintf('The first argument of "%s" must be instance of "%s", "%s" provided.', __METHOD__, UserInterface::class, get_debug_type($user)));
         }
 
         $token = new TestBrowserToken($user->getRoles(), $user, $firewallContext);
-        // required for compatibilty with Symfony 5.4
+        // required for compatibility with Symfony 5.4
         if (method_exists($token, 'isAuthenticated')) {
             $token->setAuthenticated(true, false);
         }
@@ -137,8 +135,13 @@ class KernelBrowser extends HttpKernelBrowser
         $session->set('_security_'.$firewallContext, serialize($token));
         $session->save();
 
-        $cookie = new Cookie($session->getName(), $session->getId());
-        $this->getCookieJar()->set($cookie);
+        $domains = array_unique(array_map(function (Cookie $cookie) use ($session) {
+            return $cookie->getName() === $session->getName() ? $cookie->getDomain() : '';
+        }, $this->getCookieJar()->all())) ?: [''];
+        foreach ($domains as $domain) {
+            $cookie = new Cookie($session->getName(), $session->getId(), null, null, $domain);
+            $this->getCookieJar()->set($cookie);
+        }
 
         return $this;
     }
@@ -153,6 +156,7 @@ class KernelBrowser extends HttpKernelBrowser
         // avoid shutting down the Kernel if no request has been performed yet
         // WebTestCase::createClient() boots the Kernel but do not handle a request
         if ($this->hasPerformedRequest && $this->reboot) {
+            $this->kernel->boot();
             $this->kernel->shutdown();
         } else {
             $this->hasPerformedRequest = true;
@@ -200,7 +204,7 @@ class KernelBrowser extends HttpKernelBrowser
 
         $requires = '';
         foreach (get_declared_classes() as $class) {
-            if (0 === strpos($class, 'ComposerAutoloaderInit')) {
+            if (str_starts_with($class, 'ComposerAutoloaderInit')) {
                 $r = new \ReflectionClass($class);
                 $file = \dirname($r->getFileName(), 2).'/autoload.php';
                 if (is_file($file)) {

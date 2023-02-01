@@ -110,10 +110,8 @@ class SecurityDataCollector extends DataCollector implements LateDataCollectorIn
 
             $logoutUrl = null;
             try {
-                if (null !== $this->logoutUrlGenerator) {
-                    $logoutUrl = $this->logoutUrlGenerator->getLogoutPath();
-                }
-            } catch (\Exception $e) {
+                $logoutUrl = $this->logoutUrlGenerator?->getLogoutPath();
+            } catch (\Exception) {
                 // fail silently when the logout URL cannot be generated
             }
 
@@ -186,7 +184,6 @@ class SecurityDataCollector extends DataCollector implements LateDataCollectorIn
                     'user_checker' => $firewallConfig->getUserChecker(),
                     'authenticators' => $firewallConfig->getAuthenticators(),
                 ];
-
 
                 // generate exit impersonation path from current request
                 if ($this->data['impersonated'] && null !== $switchUserConfig = $firewallConfig->getSwitchUser()) {

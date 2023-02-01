@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\Workflow\Tests\EventListener;
 
 use PHPUnit\Framework\TestCase;
@@ -137,7 +146,7 @@ class GuardListenerTest extends TestCase
     private function createEvent(Transition $transition = null)
     {
         $subject = new Subject();
-        $transition = $transition ?? new Transition('name', 'from', 'to');
+        $transition ??= new Transition('name', 'from', 'to');
 
         $workflow = $this->createMock(WorkflowInterface::class);
 

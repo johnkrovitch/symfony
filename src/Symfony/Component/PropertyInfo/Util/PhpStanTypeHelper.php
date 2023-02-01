@@ -19,6 +19,7 @@ use PHPStan\PhpDocParser\Ast\Type\ArrayShapeNode;
 use PHPStan\PhpDocParser\Ast\Type\ArrayTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\CallableTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\CallableTypeParameterNode;
+use PHPStan\PhpDocParser\Ast\Type\ConstTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\GenericTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\IdentifierTypeNode;
 use PHPStan\PhpDocParser\Ast\Type\NullableTypeNode;
@@ -102,6 +103,10 @@ final class PhpStanTypeHelper
         if ($node instanceof UnionTypeNode) {
             $types = [];
             foreach ($node->types as $type) {
+                if ($type instanceof ConstTypeNode) {
+                    // It's safer to fall back to other extractors here, as resolving const types correctly is not easy at the moment
+                    return [];
+                }
                 foreach ($this->extractTypes($type, $nameScope) as $subType) {
                     $types[] = $subType;
                 }
@@ -110,7 +115,15 @@ final class PhpStanTypeHelper
             return $this->compressNullableType($types);
         }
         if ($node instanceof GenericTypeNode) {
+            if ('class-string' === $node->type->name) {
+                return [new Type(Type::BUILTIN_TYPE_STRING)];
+            }
+
             [$mainType] = $this->extractTypes($node->type, $nameScope);
+
+            if (Type::BUILTIN_TYPE_INT === $mainType->getBuiltinType()) {
+                return [$mainType];
+            }
 
             $collectionKeyTypes = $mainType->getCollectionKeyTypes();
             $collectionKeyValues = [];
@@ -156,23 +169,34 @@ final class PhpStanTypeHelper
                 return [new Type($node->name, false, null, \in_array($node->name, Type::$builtinCollectionTypes))];
             }
 
-            switch ($node->name) {
-                case 'integer':
-                    return [new Type(Type::BUILTIN_TYPE_INT)];
-                case 'list':
-                    return [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT))];
-                case 'mixed':
-                    return []; // mixed seems to be ignored in all other extractors
-                case 'parent':
-                    return [new Type(Type::BUILTIN_TYPE_OBJECT, false, $node->name)];
-                case 'static':
-                case 'self':
-                    return [new Type(Type::BUILTIN_TYPE_OBJECT, false, $nameScope->resolveRootClass())];
-                case 'void':
-                    return [new Type(Type::BUILTIN_TYPE_NULL)];
-            }
-
-            return [new Type(Type::BUILTIN_TYPE_OBJECT, false, $nameScope->resolveStringName($node->name))];
+            return match ($node->name) {
+                'integer',
+                'positive-int',
+                'negative-int' => [new Type(Type::BUILTIN_TYPE_INT)],
+                'double' => [new Type(Type::BUILTIN_TYPE_FLOAT)],
+                'list',
+                'non-empty-list' => [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true, new Type(Type::BUILTIN_TYPE_INT))],
+                'non-empty-array' => [new Type(Type::BUILTIN_TYPE_ARRAY, false, null, true)],
+                'mixed' => [], // mixed seems to be ignored in all other extractors
+                'parent' => [new Type(Type::BUILTIN_TYPE_OBJECT, false, $node->name)],
+                'static',
+                'self' => [new Type(Type::BUILTIN_TYPE_OBJECT, false, $nameScope->resolveRootClass())],
+                'class-string',
+                'html-escaped-string',
+                'lowercase-string',
+                'non-empty-lowercase-string',
+                'non-empty-string',
+                'numeric-string',
+                'trait-string',
+                'interface-string',
+                'literal-string' => [new Type(Type::BUILTIN_TYPE_STRING)],
+                'void' => [new Type(Type::BUILTIN_TYPE_NULL)],
+                'scalar' => [new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_FLOAT), new Type(Type::BUILTIN_TYPE_STRING), new Type(Type::BUILTIN_TYPE_BOOL)],
+                'number' => [new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_FLOAT)],
+                'numeric' => [new Type(Type::BUILTIN_TYPE_INT), new Type(Type::BUILTIN_TYPE_FLOAT), new Type(Type::BUILTIN_TYPE_STRING)],
+                'array-key' => [new Type(Type::BUILTIN_TYPE_STRING), new Type(Type::BUILTIN_TYPE_INT)],
+                default => [new Type(Type::BUILTIN_TYPE_OBJECT, false, $nameScope->resolveStringName($node->name))],
+            };
         }
 
         return [];

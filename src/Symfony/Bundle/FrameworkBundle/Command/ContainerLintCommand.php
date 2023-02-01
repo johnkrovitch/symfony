@@ -69,7 +69,7 @@ final class ContainerLintCommand extends Command
             return 1;
         }
 
-        $io->success('The container was lint successfully: all services are injected with values that are compatible with their type declarations.');
+        $io->success('The container was linted successfully: all services are injected with values that are compatible with their type declarations.');
 
         return 0;
     }
@@ -104,7 +104,6 @@ final class ContainerLintCommand extends Command
             (new XmlFileLoader($container = new ContainerBuilder($parameterBag = new EnvPlaceholderParameterBag()), new FileLocator()))->load($kernelContainer->getParameter('debug.container.dump'));
 
             $refl = new \ReflectionProperty($parameterBag, 'resolved');
-            $refl->setAccessible(true);
             $refl->setValue($parameterBag, true);
 
             $skippedIds = [];
@@ -113,6 +112,10 @@ final class ContainerLintCommand extends Command
                     $skippedIds[$serviceId] = true;
                 }
             }
+
+            $container->getCompilerPassConfig()->setBeforeOptimizationPasses([]);
+            $container->getCompilerPassConfig()->setOptimizationPasses([]);
+            $container->getCompilerPassConfig()->setBeforeRemovingPasses([]);
         }
 
         $container->setParameter('container.build_hash', 'lint_container');

@@ -22,6 +22,9 @@ use Symfony\Component\Validator\Tests\Fixtures\ConstraintA;
     ConstraintA,
     Assert\GroupSequence(['Foo', 'Entity']),
     Assert\Callback([CallbackClass::class, 'callback']),
+    Assert\Sequentially([
+        new Assert\Expression('this.getFirstName() != null')
+    ])
 ]
 class Entity extends EntityParent implements EntityInterfaceB
 {
@@ -64,7 +67,7 @@ class Entity extends EntityParent implements EntityInterfaceB
             new Assert\Range(min: 5),
         ]),
     ]
-    public $firstName;
+    public string $firstName;
     #[Assert\Valid]
     public $childA;
     #[Assert\Valid]

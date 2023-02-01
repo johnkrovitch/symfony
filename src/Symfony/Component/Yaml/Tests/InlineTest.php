@@ -473,6 +473,10 @@ class InlineTest extends TestCase
             ["'foo # bar'", 'foo # bar'],
             ["'#cfcfcf'", '#cfcfcf'],
 
+            ["\"isn't it a nice single quote\"", "isn't it a nice single quote"],
+            ['\'this is "double quoted"\'', 'this is "double quoted"'],
+            ["\"one double, four single quotes: \\\"''''\"", 'one double, four single quotes: "\'\'\'\''],
+            ['\'four double, one single quote: """"\'\'\'', 'four double, one single quote: """"\''],
             ["'a \"string\" with ''quoted strings inside'''", 'a "string" with \'quoted strings inside\''],
 
             ["'-dash'", '-dash'],
@@ -580,9 +584,6 @@ class InlineTest extends TestCase
         $this->assertSame($expected, Inline::dump($dateTime));
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testDumpUnitEnum()
     {
         $this->assertSame("!php/const Symfony\Component\Yaml\Tests\Fixtures\FooUnitEnum::BAR", Inline::dump(FooUnitEnum::BAR));
@@ -738,6 +739,24 @@ class InlineTest extends TestCase
         $this->assertInstanceOf(TaggedValue::class, $value['foo']);
         $this->assertSame('bar', $value['foo']->getTag());
         $this->assertSame('', $value['foo']->getValue());
+    }
+
+    public function testTagWithQuotedInteger()
+    {
+        $value = Inline::parse('!number "5"', Yaml::PARSE_CUSTOM_TAGS);
+
+        $this->assertInstanceOf(TaggedValue::class, $value);
+        $this->assertSame('number', $value->getTag());
+        $this->assertSame('5', $value->getValue());
+    }
+
+    public function testTagWithUnquotedInteger()
+    {
+        $value = Inline::parse('!number 5', Yaml::PARSE_CUSTOM_TAGS);
+
+        $this->assertInstanceOf(TaggedValue::class, $value);
+        $this->assertSame('number', $value->getTag());
+        $this->assertSame(5, $value->getValue());
     }
 
     public function testUnfinishedInlineMap()

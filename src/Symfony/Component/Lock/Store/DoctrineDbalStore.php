@@ -89,10 +89,23 @@ class DoctrineDbalStore implements PersistingStoreInterface
                 ParameterType::STRING,
                 ParameterType::STRING,
             ]);
-        } catch (TableNotFoundException $e) {
-            $this->createTable();
-            $this->save($key);
-        } catch (DBALException $e) {
+        } catch (TableNotFoundException) {
+            if (!$this->conn->isTransactionActive() || $this->platformSupportsTableCreationInTransaction()) {
+                $this->createTable();
+            }
+
+            try {
+                $this->conn->executeStatement($sql, [
+                    $this->getHashedKey($key),
+                    $this->getUniqueToken($key),
+                ], [
+                    ParameterType::STRING,
+                    ParameterType::STRING,
+                ]);
+            } catch (DBALException) {
+                $this->putOffExpiration($key, $this->initialTtl);
+            }
+        } catch (DBALException) {
             // the lock is already acquired. It could be us. Let's try to put off.
             $this->putOffExpiration($key, $this->initialTtl);
         }
@@ -210,27 +223,34 @@ class DoctrineDbalStore implements PersistingStoreInterface
     private function getCurrentTimestampStatement(): string
     {
         $platform = $this->conn->getDatabasePlatform();
-        switch (true) {
-            case $platform instanceof \Doctrine\DBAL\Platforms\MySQLPlatform:
-            case $platform instanceof \Doctrine\DBAL\Platforms\MySQL57Platform:
-                return 'UNIX_TIMESTAMP()';
 
-            case $platform instanceof \Doctrine\DBAL\Platforms\SqlitePlatform:
-                return 'strftime(\'%s\',\'now\')';
+        return match (true) {
+            $platform instanceof \Doctrine\DBAL\Platforms\MySQLPlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\MySQL57Platform => 'UNIX_TIMESTAMP()',
+            $platform instanceof \Doctrine\DBAL\Platforms\SqlitePlatform => 'strftime(\'%s\',\'now\')',
+            $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQLPlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQL94Platform => 'CAST(EXTRACT(epoch FROM NOW()) AS INT)',
+            $platform instanceof \Doctrine\DBAL\Platforms\OraclePlatform => '(SYSDATE - TO_DATE(\'19700101\',\'yyyymmdd\'))*86400 - TO_NUMBER(SUBSTR(TZ_OFFSET(sessiontimezone), 1, 3))*3600',
+            $platform instanceof \Doctrine\DBAL\Platforms\SQLServerPlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\SQLServer2012Platform => 'DATEDIFF(s, \'1970-01-01\', GETUTCDATE())',
+            default => (string) time(),
+        };
+    }
 
-            case $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQLPlatform:
-            case $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQL94Platform:
-                return 'CAST(EXTRACT(epoch FROM NOW()) AS INT)';
+    /**
+     * Checks whether current platform supports table creation within transaction.
+     */
+    private function platformSupportsTableCreationInTransaction(): bool
+    {
+        $platform = $this->conn->getDatabasePlatform();
 
-            case $platform instanceof \Doctrine\DBAL\Platforms\OraclePlatform:
-                return '(SYSDATE - TO_DATE(\'19700101\',\'yyyymmdd\'))*86400 - TO_NUMBER(SUBSTR(TZ_OFFSET(sessiontimezone), 1, 3))*3600';
-
-            case $platform instanceof \Doctrine\DBAL\Platforms\SQLServerPlatform:
-            case $platform instanceof \Doctrine\DBAL\Platforms\SQLServer2012Platform:
-                return 'DATEDIFF(s, \'1970-01-01\', GETUTCDATE())';
-
-            default:
-                return (string) time();
-        }
+        return match (true) {
+            $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQLPlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\PostgreSQL94Platform,
+            $platform instanceof \Doctrine\DBAL\Platforms\SqlitePlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\SQLServerPlatform,
+            $platform instanceof \Doctrine\DBAL\Platforms\SQLServer2012Platform => true,
+            default => false,
+        };
     }
 }

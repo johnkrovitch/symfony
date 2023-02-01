@@ -45,7 +45,7 @@ final class TraceableAuthenticator implements AuthenticatorInterface, Interactiv
             'supports' => true,
             'passport' => $this->passport,
             'duration' => $this->duration,
-            'stub' => $this->stub ?? $this->stub = class_exists(ClassStub::class) ? new ClassStub(\get_class($this->authenticator)) : \get_class($this->authenticator),
+            'stub' => $this->stub ??= class_exists(ClassStub::class) ? new ClassStub(\get_class($this->authenticator)) : \get_class($this->authenticator),
         ];
     }
 
@@ -90,6 +90,14 @@ final class TraceableAuthenticator implements AuthenticatorInterface, Interactiv
     public function isInteractive(): bool
     {
         return $this->authenticator instanceof InteractiveAuthenticatorInterface && $this->authenticator->isInteractive();
+    }
+
+    /**
+     * @internal
+     */
+    public function getAuthenticator(): AuthenticatorInterface
+    {
+        return $this->authenticator;
     }
 
     public function __call($method, $args)

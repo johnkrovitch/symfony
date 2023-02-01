@@ -23,13 +23,9 @@ use Symfony\Component\Mime\RawMessage;
 /**
  * SendmailTransport for sending mail through a Sendmail/Postfix (etc..) binary.
  *
- * Supported modes are -bs and -t, with any additional flags desired.
- * It is advised to use -bs mode since error reporting with -t mode is not
- * possible.
+ * Transport can be instantiated through SendmailTransportFactory or NativeTransportFactory:
  *
- * Transport can be instanciated through SendmailTransportFactory or NativeTransportFactory:
- *
- * - SendmailTransportFactory to use most common sendmail path and recommanded options
+ * - SendmailTransportFactory to use most common sendmail path and recommended options
  * - NativeTransportFactory when configuration is set via php.ini
  *
  * @author Fabien Potencier <fabien@symfony.com>
@@ -44,11 +40,14 @@ class SendmailTransport extends AbstractTransport
     /**
      * Constructor.
      *
-     * If using -t mode you are strongly advised to include -oi or -i in the flags.
-     * For example: /usr/sbin/sendmail -oi -t
-     * -f<sender> flag will be appended automatically if one is not present.
+     * Supported modes are -bs and -t, with any additional flags desired.
      *
      * The recommended mode is "-bs" since it is interactive and failure notifications are hence possible.
+     * Note that the -t mode does not support error reporting and does not support Bcc properly (the Bcc headers are not removed).
+     *
+     * If using -t mode, you are strongly advised to include -oi or -i in the flags (like /usr/sbin/sendmail -oi -t)
+     *
+     * -f<sender> flag will be appended automatically if one is not present.
      */
     public function __construct(string $command = null, EventDispatcherInterface $dispatcher = null, LoggerInterface $logger = null)
     {
@@ -92,6 +91,11 @@ class SendmailTransport extends AbstractTransport
         $this->getLogger()->debug(sprintf('Email transport "%s" starting', __CLASS__));
 
         $command = $this->command;
+
+        if ($recipients = $message->getEnvelope()->getRecipients()) {
+            $command = str_replace(' -t', '', $command);
+        }
+
         if (!str_contains($command, ' -f')) {
             $command .= ' -f'.escapeshellarg($message->getEnvelope()->getSender()->getEncodedAddress());
         }
@@ -100,6 +104,10 @@ class SendmailTransport extends AbstractTransport
 
         if (!str_contains($command, ' -i') && !str_contains($command, ' -oi')) {
             $chunks = AbstractStream::replace("\n.", "\n..", $chunks);
+        }
+
+        foreach ($recipients as $recipient) {
+            $command .= ' '.escapeshellarg($recipient->getEncodedAddress());
         }
 
         $this->stream->setCommand($command);

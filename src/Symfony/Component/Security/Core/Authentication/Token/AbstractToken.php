@@ -11,6 +11,7 @@
 
 namespace Symfony\Component\Security\Core\Authentication\Token;
 
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
@@ -47,7 +48,7 @@ abstract class AbstractToken implements TokenInterface, \Serializable
 
     public function getUserIdentifier(): string
     {
-        return $this->user->getUserIdentifier();
+        return $this->user ? $this->user->getUserIdentifier() : '';
     }
 
     /**
@@ -114,7 +115,8 @@ abstract class AbstractToken implements TokenInterface, \Serializable
      */
     public function __unserialize(array $data): void
     {
-        [$this->user, , , $this->attributes, $this->roleNames] = $data;
+        [$user, , , $this->attributes, $this->roleNames] = $data;
+        $this->user = \is_string($user) ? new InMemoryUser($user, '', $this->roleNames, false) : $user;
     }
 
     /**

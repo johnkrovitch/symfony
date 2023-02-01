@@ -65,7 +65,7 @@ class JsonLoginAuthenticator implements InteractiveAuthenticatorInterface
 
     public function supports(Request $request): ?bool
     {
-        if (false === strpos($request->getRequestFormat() ?? '', 'json') && false === strpos($request->getContentType() ?? '', 'json')) {
+        if (!str_contains($request->getRequestFormat() ?? '', 'json') && !str_contains($request->getContentType() ?? '', 'json')) {
             return false;
         }
 
@@ -87,7 +87,7 @@ class JsonLoginAuthenticator implements InteractiveAuthenticatorInterface
         }
 
         $passport = new Passport(
-            new UserBadge($credentials['username'], [$this->userProvider, 'loadUserByIdentifier']),
+            new UserBadge($credentials['username'], $this->userProvider->loadUserByIdentifier(...)),
             new PasswordCredentials($credentials['password'])
         );
         if ($this->userProvider instanceof PasswordUpgraderInterface) {

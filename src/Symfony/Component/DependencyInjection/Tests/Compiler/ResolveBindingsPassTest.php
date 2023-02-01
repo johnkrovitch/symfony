@@ -25,7 +25,10 @@ use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\BarInterface;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\CaseSensitiveClass;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\FooUnitEnum;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedArgumentsDummy;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedEnumArgumentDummy;
+use Symfony\Component\DependencyInjection\Tests\Fixtures\NamedIterableArgumentDummy;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\ParentNotExists;
 use Symfony\Component\DependencyInjection\Tests\Fixtures\WithTarget;
 use Symfony\Component\DependencyInjection\TypedReference;
@@ -63,6 +66,24 @@ class ResolveBindingsPassTest extends TestCase
         ];
         $this->assertEquals($expected, $definition->getArguments());
         $this->assertEquals([['setSensitiveClass', [new Reference('foo')]]], $definition->getMethodCalls());
+    }
+
+    public function testProcessEnum()
+    {
+        $container = new ContainerBuilder();
+
+        $bindings = [
+            FooUnitEnum::class.' $bar' => new BoundArgument(FooUnitEnum::BAR),
+        ];
+
+        $definition = $container->register(NamedEnumArgumentDummy::class, NamedEnumArgumentDummy::class);
+        $definition->setBindings($bindings);
+
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $expected = [FooUnitEnum::BAR];
+        $this->assertEquals($expected, $definition->getArguments());
     }
 
     public function testUnusedBinding()
@@ -189,6 +210,28 @@ class ResolveBindingsPassTest extends TestCase
         $pass->process($container);
     }
 
+    public function testIterableBindingTypehint()
+    {
+        $autoloader = static function ($class) {
+            if ('iterable' === $class) {
+                throw new \RuntimeException('We should not search pseudo-type iterable as class');
+            }
+        };
+        spl_autoload_register($autoloader);
+
+        $container = new ContainerBuilder();
+        $definition = $container->register('bar', NamedIterableArgumentDummy::class);
+        $definition->setBindings([
+            'iterable $items' => new TaggedIteratorArgument('foo'),
+        ]);
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $this->assertInstanceOf(TaggedIteratorArgument::class, $container->getDefinition('bar')->getArgument(0));
+
+        spl_autoload_unregister($autoloader);
+    }
+
     public function testBindWithTarget()
     {
         $container = new ContainerBuilder();
@@ -199,5 +242,25 @@ class ResolveBindingsPassTest extends TestCase
         (new ResolveBindingsPass())->process($container);
 
         $this->assertSame('bar', (string) $container->getDefinition('with_target')->getArgument(0));
+    }
+
+    public function testBindWithNamedArgs()
+    {
+        $container = new ContainerBuilder();
+
+        $bindings = [
+            '$apiKey' => new BoundArgument('K'),
+        ];
+
+        $definition = $container->register(NamedArgumentsDummy::class, NamedArgumentsDummy::class);
+        $definition->setArguments(['c' => 'C', 'hostName' => 'H']);
+        $definition->setBindings($bindings);
+
+        $container->register('foo', CaseSensitiveClass::class);
+
+        $pass = new ResolveBindingsPass();
+        $pass->process($container);
+
+        $this->assertEquals(['C', 'K', 'H'], $definition->getArguments());
     }
 }

@@ -22,6 +22,7 @@ use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\EventListener\ErrorListener;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\Log\DebugLoggerInterface;
@@ -40,9 +41,7 @@ class ErrorListenerTest extends TestCase
         $l = new ErrorListener('foo', $logger);
 
         $_logger = new \ReflectionProperty(\get_class($l), 'logger');
-        $_logger->setAccessible(true);
         $_controller = new \ReflectionProperty(\get_class($l), 'controller');
-        $_controller->setAccessible(true);
 
         $this->assertSame($logger, $_logger->getValue($l));
         $this->assertSame('foo', $_controller->getValue($l));
@@ -208,7 +207,7 @@ class ErrorListenerTest extends TestCase
         }];
 
         yield [function ($exception) {
-            $this->assertInstanceOf(FlattenException::class, $exception);
+            static::assertInstanceOf(FlattenException::class, $exception);
 
             return new Response('OK: '.$exception->getMessage());
         }];
@@ -231,6 +230,11 @@ class TestKernel implements HttpKernelInterface
 {
     public function handle(Request $request, $type = self::MAIN_REQUEST, $catch = true): Response
     {
+        $e = $request->attributes->get('exception');
+        if ($e instanceof HttpExceptionInterface) {
+            return new Response('foo', $e->getStatusCode(), $e->getHeaders());
+        }
+
         return new Response('foo');
     }
 }

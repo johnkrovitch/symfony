@@ -12,6 +12,7 @@
 namespace Symfony\Bundle\FrameworkBundle\Test;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -35,11 +36,10 @@ abstract class KernelTestCase extends TestCase
 
     protected static $booted = false;
 
-    private static ?ContainerInterface $kernelContainer = null;
-
     protected function tearDown(): void
     {
         static::ensureKernelShutdown();
+        static::$class = null;
         static::$kernel = null;
         static::$booted = false;
     }
@@ -68,11 +68,10 @@ abstract class KernelTestCase extends TestCase
     {
         static::ensureKernelShutdown();
 
-        static::$kernel = static::createKernel($options);
-        static::$kernel->boot();
+        $kernel = static::createKernel($options);
+        $kernel->boot();
+        static::$kernel = $kernel;
         static::$booted = true;
-
-        self::$kernelContainer = static::$kernel->getContainer();
 
         return static::$kernel;
     }
@@ -84,6 +83,8 @@ abstract class KernelTestCase extends TestCase
      * used by other services.
      *
      * Using this method is the best way to get a container from your test code.
+     *
+     * @return Container
      */
     protected static function getContainer(): ContainerInterface
     {
@@ -92,7 +93,7 @@ abstract class KernelTestCase extends TestCase
         }
 
         try {
-            return self::$kernelContainer->get('test.service_container');
+            return self::$kernel->getContainer()->get('test.service_container');
         } catch (ServiceNotFoundException $e) {
             throw new \LogicException('Could not find service "test.service_container". Try updating the "framework.test" config to "true".', 0, $e);
         }
@@ -141,14 +142,14 @@ abstract class KernelTestCase extends TestCase
     protected static function ensureKernelShutdown()
     {
         if (null !== static::$kernel) {
+            static::$kernel->boot();
+            $container = static::$kernel->getContainer();
             static::$kernel->shutdown();
             static::$booted = false;
-        }
 
-        if (self::$kernelContainer instanceof ResetInterface) {
-            self::$kernelContainer->reset();
+            if ($container instanceof ResetInterface) {
+                $container->reset();
+            }
         }
-
-        self::$kernelContainer = null;
     }
 }

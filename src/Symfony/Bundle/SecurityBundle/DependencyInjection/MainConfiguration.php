@@ -65,7 +65,7 @@ class MainConfiguration implements ConfigurationInterface
                 ->end()
                 ->booleanNode('hide_user_not_found')->defaultTrue()->end()
                 ->booleanNode('erase_credentials')->defaultTrue()->end()
-                ->booleanNode('enable_authenticator_manager')->defaultFalse()->info('Enables the new Symfony Security system based on Authenticators, all used authenticators must support this before enabling this.')->end()
+                ->booleanNode('enable_authenticator_manager')->defaultTrue()->end()
                 ->arrayNode('access_decision_manager')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -134,6 +134,7 @@ class MainConfiguration implements ConfigurationInterface
                         ->fixXmlConfig('ip')
                         ->fixXmlConfig('method')
                         ->children()
+                            ->scalarNode('request_matcher')->defaultNull()->end()
                             ->scalarNode('requires_channel')->defaultNull()->end()
                             ->scalarNode('path')
                                 ->defaultNull()
@@ -255,7 +256,7 @@ class MainConfiguration implements ConfigurationInterface
                                 return $requiredBadge;
                             }
 
-                            if (false === strpos($requiredBadge, '\\')) {
+                            if (!str_contains($requiredBadge, '\\')) {
                                 $fqcn = 'Symfony\Component\Security\Http\Authenticator\Passport\Badge\\'.$requiredBadge;
                                 if (class_exists($fqcn)) {
                                     return $fqcn;

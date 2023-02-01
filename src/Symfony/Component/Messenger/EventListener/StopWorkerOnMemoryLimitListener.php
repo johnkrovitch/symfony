@@ -30,7 +30,7 @@ class StopWorkerOnMemoryLimitListener implements EventSubscriberInterface
         $this->memoryLimit = $memoryLimit;
         $this->logger = $logger;
         $memoryResolver ??= static fn () => memory_get_usage(true);
-        $this->memoryResolver = $memoryResolver instanceof \Closure ? $memoryResolver : \Closure::fromCallable($memoryResolver);
+        $this->memoryResolver = $memoryResolver(...);
     }
 
     public function onWorkerRunning(WorkerRunningEvent $event): void
@@ -39,9 +39,7 @@ class StopWorkerOnMemoryLimitListener implements EventSubscriberInterface
         $usedMemory = $memoryResolver();
         if ($usedMemory > $this->memoryLimit) {
             $event->getWorker()->stop();
-            if (null !== $this->logger) {
-                $this->logger->info('Worker stopped due to memory limit of {limit} bytes exceeded ({memory} bytes used)', ['limit' => $this->memoryLimit, 'memory' => $usedMemory]);
-            }
+            $this->logger?->info('Worker stopped due to memory limit of {limit} bytes exceeded ({memory} bytes used)', ['limit' => $this->memoryLimit, 'memory' => $usedMemory]);
         }
     }
 

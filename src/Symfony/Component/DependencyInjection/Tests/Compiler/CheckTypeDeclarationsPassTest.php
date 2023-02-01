@@ -929,9 +929,6 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testIntersectionTypePassesWithReference()
     {
         $container = new ContainerBuilder();
@@ -945,9 +942,6 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    /**
-     * @requires PHP 8.1
-     */
     public function testIntersectionTypeFailsWithReference()
     {
         $container = new ContainerBuilder();
@@ -960,5 +954,37 @@ class CheckTypeDeclarationsPassTest extends TestCase
         $this->expectExceptionMessage('Invalid definition for service "intersection": argument 1 of "Symfony\\Component\\DependencyInjection\\Tests\\Fixtures\\CheckTypeDeclarationsPass\\IntersectionConstructor::__construct()" accepts "Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\Foo&Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\WaldoInterface", "Symfony\Component\DependencyInjection\Tests\Fixtures\CheckTypeDeclarationsPass\Waldo" passed.');
 
         (new CheckTypeDeclarationsPass(true))->process($container);
+    }
+
+    public function testCallableClass()
+    {
+        $container = new ContainerBuilder();
+        $definition = $container->register('foo', CallableClass::class);
+        $definition->addMethodCall('callMethod', [123]);
+
+        (new CheckTypeDeclarationsPass())->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testIgnoreDefinitionFactoryArgument()
+    {
+        $container = new ContainerBuilder();
+        $container->register('bar', Bar::class)
+            ->setArguments([
+                (new Definition(Foo::class))
+                    ->setFactory([Foo::class, 'createStdClass']),
+            ]);
+
+        (new CheckTypeDeclarationsPass())->process($container);
+
+        $this->addToAssertionCount(1);
+    }
+}
+
+class CallableClass
+{
+    public function __call($name, $arguments)
+    {
     }
 }

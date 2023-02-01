@@ -86,8 +86,8 @@ class ObjectNormalizer extends AbstractObjectNormalizer
             $name = $reflMethod->name;
             $attributeName = null;
 
-            if (str_starts_with($name, 'get') || str_starts_with($name, 'has')) {
-                // getters and hassers
+            if (str_starts_with($name, 'get') || str_starts_with($name, 'has') || str_starts_with($name, 'can')) {
+                // getters, hassers and canners
                 $attributeName = substr($name, 3);
 
                 if (!$reflClass->hasProperty($attributeName)) {
@@ -133,7 +133,7 @@ class ObjectNormalizer extends AbstractObjectNormalizer
             $this->discriminatorCache[$cacheKey] = null;
             if (null !== $this->classDiscriminatorResolver) {
                 $mapping = $this->classDiscriminatorResolver->getMappingForMappedObject($object);
-                $this->discriminatorCache[$cacheKey] = null === $mapping ? null : $mapping->getTypeProperty();
+                $this->discriminatorCache[$cacheKey] = $mapping?->getTypeProperty();
             }
         }
 
@@ -147,7 +147,7 @@ class ObjectNormalizer extends AbstractObjectNormalizer
     {
         try {
             $this->propertyAccessor->setValue($object, $attribute, $value);
-        } catch (NoSuchPropertyException $exception) {
+        } catch (NoSuchPropertyException) {
             // Properties not found are ignored
         }
     }

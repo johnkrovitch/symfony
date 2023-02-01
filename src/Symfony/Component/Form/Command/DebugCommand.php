@@ -209,7 +209,6 @@ EOF
     {
         $coreExtension = new CoreExtension();
         $loadTypesRefMethod = (new \ReflectionObject($coreExtension))->getMethod('loadTypes');
-        $loadTypesRefMethod->setAccessible(true);
         $coreTypes = $loadTypesRefMethod->invoke($coreExtension);
         $coreTypes = array_map(function (FormTypeInterface $type) { return \get_class($type); }, $coreTypes);
         sort($coreTypes);
@@ -275,7 +274,7 @@ EOF
         if (!class_exists($class) || !is_subclass_of($class, FormTypeInterface::class)) {
             $classes = $this->getFqcnTypeClasses($class);
 
-            if (1 === count($classes)) {
+            if (1 === \count($classes)) {
                 $class = $classes[0];
             }
         }

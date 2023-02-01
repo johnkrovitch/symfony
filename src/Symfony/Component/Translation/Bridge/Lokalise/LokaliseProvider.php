@@ -30,6 +30,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 final class LokaliseProvider implements ProviderInterface
 {
+    private const LOKALISE_GET_KEYS_LIMIT = 5000;
+
     private HttpClientInterface $client;
     private LoaderInterface $loader;
     private LoggerInterface $logger;
@@ -73,7 +75,7 @@ final class LokaliseProvider implements ProviderInterface
                 $existingKeysByDomain[$domain] = [];
             }
 
-            $existingKeysByDomain[$domain] += $this->getKeysIds(array_keys($defaultCatalogue->all($domain)), $domain);
+            $existingKeysByDomain[$domain] += $this->getKeysIds([], $domain);
         }
 
         $keysToCreate = $createdKeysByDomain = [];
@@ -118,10 +120,12 @@ final class LokaliseProvider implements ProviderInterface
         $keysIds = [];
 
         foreach ($catalogue->getDomains() as $domain) {
-            $keysToDelete = [];
-            foreach (array_keys($catalogue->all($domain)) as $key) {
-                $keysToDelete[] = $key;
+            $keysToDelete = array_keys($catalogue->all($domain));
+
+            if (!$keysToDelete) {
+                continue;
             }
+
             $keysIds += $this->getKeysIds($keysToDelete, $domain);
         }
 
@@ -145,8 +149,9 @@ final class LokaliseProvider implements ProviderInterface
                 'original_filenames' => true,
                 'directory_prefix' => '%LANG_ISO%',
                 'filter_langs' => array_values($locales),
-                'filter_filenames' => array_map([$this, 'getLokaliseFilenameFromDomain'], $domains),
+                'filter_filenames' => array_map($this->getLokaliseFilenameFromDomain(...), $domains),
                 'export_empty_as' => 'skip',
+                'replace_breaks' => false,
             ],
         ]);
 
@@ -196,8 +201,12 @@ final class LokaliseProvider implements ProviderInterface
         $createdKeys = [];
 
         foreach ($responses as $response) {
-            if (200 !== $response->getStatusCode()) {
+            if (200 !== $statusCode = $response->getStatusCode()) {
                 $this->logger->error(sprintf('Unable to create keys to Lokalise: "%s".', $response->getContent(false)));
+
+                if (500 <= $statusCode) {
+                    throw new ProviderException('Unable to create keys to Lokalise.', $response);
+                }
 
                 continue;
             }
@@ -217,7 +226,7 @@ final class LokaliseProvider implements ProviderInterface
      * Translations will be created for keys without existing translations.
      * Translations will be updated for keys with existing translations.
      */
-    private function updateTranslations(array $keysByDomain, TranslatorBagInterface $translatorBag)
+    private function updateTranslations(array $keysByDomain, TranslatorBagInterface $translatorBag): void
     {
         $keysToUpdate = [];
 
@@ -248,43 +257,65 @@ final class LokaliseProvider implements ProviderInterface
             }
         }
 
-        $chunks = array_chunk($keysToUpdate, 500);
-        $responses = [];
+        $response = $this->client->request('PUT', 'keys', [
+            'json' => ['keys' => $keysToUpdate],
+        ]);
 
-        foreach ($chunks as $chunk) {
-            $responses[] = $this->client->request('PUT', 'keys', [
-                'json' => ['keys' => $chunk],
-            ]);
-        }
+        if (200 !== $statusCode = $response->getStatusCode()) {
+            $this->logger->error(sprintf('Unable to create/update translations to Lokalise: "%s".', $response->getContent(false)));
 
-        foreach ($responses as $response) {
-            if (200 !== $response->getStatusCode()) {
-                $this->logger->error(sprintf('Unable to create/update translations to Lokalise: "%s".', $response->getContent(false)));
+            if (500 <= $statusCode) {
+                throw new ProviderException('Unable to create/update translations to Lokalise.', $response);
             }
         }
     }
 
-    private function getKeysIds(array $keys, string $domain): array
+    private function getKeysIds(array $keys, string $domain, int $page = 1): array
     {
         $response = $this->client->request('GET', 'keys', [
             'query' => [
                 'filter_keys' => implode(',', $keys),
                 'filter_filenames' => $this->getLokaliseFilenameFromDomain($domain),
+                'limit' => self::LOKALISE_GET_KEYS_LIMIT,
+                'page' => $page,
             ],
         ]);
 
-        if (200 !== $response->getStatusCode()) {
+        if (200 !== $statusCode = $response->getStatusCode()) {
             $this->logger->error(sprintf('Unable to get keys ids from Lokalise: "%s".', $response->getContent(false)));
+
+            if (500 <= $statusCode) {
+                throw new ProviderException('Unable to get keys ids from Lokalise.', $response);
+            }
         }
 
-        return array_reduce($response->toArray(false)['keys'], static function ($carry, array $keyItem) {
-            $carry[$keyItem['key_name']['web']] = $keyItem['key_id'];
+        $result = [];
+        $keysFromResponse = $response->toArray(false)['keys'] ?? [];
 
-            return $carry;
-        }, []);
+        if (\count($keysFromResponse) > 0) {
+            $result = array_reduce($keysFromResponse, static function ($carry, array $keyItem) {
+                $carry[$keyItem['key_name']['web']] = $keyItem['key_id'];
+
+                return $carry;
+            }, []);
+        }
+
+        $paginationTotalCount = $response->getHeaders(false)['x-pagination-total-count'] ?? [];
+        $keysTotalCount = (int) (reset($paginationTotalCount) ?? 0);
+
+        if (0 === $keysTotalCount) {
+            return $result;
+        }
+
+        $pages = ceil($keysTotalCount / self::LOKALISE_GET_KEYS_LIMIT);
+        if ($page < $pages) {
+            $result = array_merge($result, $this->getKeysIds($keys, $domain, ++$page));
+        }
+
+        return $result;
     }
 
-    private function ensureAllLocalesAreCreated(TranslatorBagInterface $translatorBag)
+    private function ensureAllLocalesAreCreated(TranslatorBagInterface $translatorBag): void
     {
         $providerLanguages = $this->getLanguages();
         $missingLanguages = array_reduce($translatorBag->getCatalogues(), static function ($carry, $catalogue) use ($providerLanguages) {
@@ -304,8 +335,12 @@ final class LokaliseProvider implements ProviderInterface
     {
         $response = $this->client->request('GET', 'languages');
 
-        if (200 !== $response->getStatusCode()) {
+        if (200 !== $statusCode = $response->getStatusCode()) {
             $this->logger->error(sprintf('Unable to get languages from Lokalise: "%s".', $response->getContent(false)));
+
+            if (500 <= $statusCode) {
+                throw new ProviderException('Unable to get languages from Lokalise.', $response);
+            }
 
             return [];
         }
@@ -329,8 +364,12 @@ final class LokaliseProvider implements ProviderInterface
             ],
         ]);
 
-        if (200 !== $response->getStatusCode()) {
+        if (200 !== $statusCode = $response->getStatusCode()) {
             $this->logger->error(sprintf('Unable to create languages on Lokalise: "%s".', $response->getContent(false)));
+
+            if (500 <= $statusCode) {
+                throw new ProviderException('Unable to create languages on Lokalise.', $response);
+            }
         }
     }
 
